@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Мультипостер</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f4f4f5; color: #111; }
+    .wrap { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 20px; margin-bottom: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .4px; }
+    input, textarea, select {
+      width: 100%; padding: 9px 12px; border: 1px solid #ddd;
+      border-radius: 8px; font-size: 15px; outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #6366f1; }
+    textarea { min-height: 90px; resize: vertical; }
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    input[type=number] { -moz-appearance: textfield; }
+    .field { margin-bottom: 14px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Фото */
+    .photo-drop { border: 2px dashed #ddd; border-radius: 8px; padding: 28px; text-align: center; cursor: pointer; }
+    .photo-drop:hover { border-color: #6366f1; }
+    .photo-drop input { display: none; }
+    .previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .previews img { width: 70px; height: 70px; object-fit: cover; border-radius: 6px; }
+
+    /* Розміри */
+    .size-row { display: grid; grid-template-columns: 1fr 1fr 80px 32px; gap: 8px; margin-bottom: 8px; align-items: center; }
+    .size-row input { padding: 8px 10px; }
+    .btn-remove { background: none; border: 1px solid #fca5a5; color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 16px; height: 36px; }
+    .btn-add { background: none; border: 1px dashed #6366f1; color: #6366f1; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px; width: 100%; margin-top: 4px; }
+
+    /* Сабміт */
+    .btn-submit { width: 100%; padding: 13px; background: #6366f1; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    .btn-submit:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    /* Результат */
+    #result { display: none; padding: 14px 16px; border-radius: 8px; margin-top: 12px; font-size: 15px; }
+    #result.ok   { background: #dcfce7; color: #166534; }
+    #result.fail { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Новий товар</h1>
+
+  <form id="form">
+    <div class="card">
+      <div class="field">
+        <label>Фото (до 5 шт)</label>
+        <div class="photo-drop" onclick="document.getElementById('photos').click()">
+          <span id="photo-hint">Натисни щоб вибрати фото</span>
+          <input type="file" id="photos" name="photos" multiple accept="image/*">
+          <div class="previews" id="previews"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>Назва</label>
+        <input type="text" name="title" placeholder="Футболка чоловіча біла" required>
+      </div>
+      <div class="field">
+        <label>Опис</label>
+        <textarea name="description" placeholder="Матеріал, особливості..." required></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Ціна (грн)</label>
+          <input type="number" name="price" placeholder="350" required>
+        </div>
+        <div class="field">
+          <label>Кількість</label>
+          <input type="number" name="quantity" placeholder="1" value="1" required>
+        </div>
+      </div>
+      <div class="field">
+        <label>Категорія</label>
+        <select name="category_id" id="category-select" required>
+          <option value="">Завантаження...</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Search aliace</label>
+        <input type="text" name="searchAliace" placeholder="futbolka-cholovika">
+      </div>
+    </div>
+
+    <div class="card">
+      <label style="margin-bottom:12px">Розміри</label>
+      <div id="sizes-list"></div>
+      <button type="button" class="btn-add" onclick="addSize()">+ Додати розмір</button>
+    </div>
+
+    <button type="submit" class="btn-submit" id="submit-btn">Опублікувати</button>
+    <div id="result"></div>
+  </form>
+</div>
+
+<script>
+  // Категорії
+  fetch('/api/categories')
+    .then(r => r.json())
+    .then(cats => {
+      const sel = document.getElementById('category-select')
+      const parents = cats.filter(c => c.parent_id === null)
+      const children = cats.filter(c => c.parent_id !== null)
+
+      sel.innerHTML = '<option value="">Вибери категорію</option>'
+
+      parents.forEach(parent => {
+        const kids = children.filter(c => c.parent_id === parent.id)
+        if (kids.length) {
+          const group = document.createElement('optgroup')
+          group.label = parent.name
+          kids.forEach(child => {
+            const opt = document.createElement('option')
+            opt.value = child.id
+            opt.textContent = child.name
+            group.appendChild(opt)
+          })
+          sel.appendChild(group)
+        } else {
+          const opt = document.createElement('option')
+          opt.value = parent.id
+          opt.textContent = parent.name
+          sel.appendChild(opt)
+        }
+      })
+    })
+    .catch(() => {
+      document.getElementById('category-select').innerHTML = '<option value="">Помилка завантаження</option>'
+    })
+
+  // Прев'ю фото
+  document.getElementById('photos').addEventListener('change', function () {
+    const previews = document.getElementById('previews')
+    const hint = document.getElementById('photo-hint')
+    previews.innerHTML = ''
+    if (this.files.length) hint.style.display = 'none'
+    Array.from(this.files).forEach(f => {
+      const img = document.createElement('img')
+      img.src = URL.createObjectURL(f)
+      previews.appendChild(img)
+    })
+  })
+
+  // Розміри
+  const colorOptions = [
+    { ru: 'Білий', en: 'white' },
+    { ru: 'Чорний', en: 'black' },
+    { ru: 'Червоний', en: 'red' },
+    { ru: 'Синій', en: 'blue' },
+    { ru: 'Зелений', en: 'green' },
+    { ru: 'Жовтий', en: 'yellow' },
+    { ru: 'Помаранчевий', en: 'orange' },
+    { ru: 'Рожевий', en: 'pink' },
+    { ru: 'Фіолетовий', en: 'purple' },
+    { ru: 'Сірий', en: 'gray' },
+    { ru: 'Коричневий', en: 'brown' },
+    { ru: 'Бежевий', en: 'beige' },
+    { ru: 'Блакитний', en: 'lightblue' },
+    { ru: 'Бірюзовий', en: 'cyan' },
+    { ru: 'Золотий', en: 'gold' },
+    { ru: 'Срібний', en: 'silver' },
+  ]
+
+  const colorOptionsHtml = colorOptions.map(c =>
+    `<option value="${c.en}">${c.ru}</option>`
+  ).join('')
+
+  let sizeCount = 0
+  function addSize() {
+    const id = sizeCount++
+    const div = document.createElement('div')
+    div.className = 'size-row'
+    div.id = `size-${id}`
+    div.innerHTML = `
+      <input type="text" placeholder="Розмір (M, XL...)" data-size-field="size">
+      <select data-size-field="color">
+        <option value="">Колір</option>
+        ${colorOptionsHtml}
+      </select>
+      <input type="number" placeholder="К-сть" data-size-field="quantity" value="1">
+      <button type="button" class="btn-remove" onclick="document.getElementById('size-${id}').remove()">×</button>
+    `
+    document.getElementById('sizes-list').appendChild(div)
+  }
+
+  function collectSizes() {
+    const rows = document.querySelectorAll('.size-row')
+    return Array.from(rows).map(row => ({
+      size:     row.querySelector('[data-size-field="size"]').value.trim(),
+      color:    row.querySelector('[data-size-field="color"]').value.trim(),
+      quantity: Number(row.querySelector('[data-size-field="quantity"]').value),
+    })).filter(s => s.size)
+  }
+
+  // Сабміт
+  document.getElementById('form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const btn = document.getElementById('submit-btn')
+    const result = document.getElementById('result')
+    btn.disabled = true
+    btn.textContent = 'Публікую...'
+    result.style.display = 'none'
+
+    const fd = new FormData(e.target)
+    fd.delete('sizes')
+    fd.append('sizes', JSON.stringify(collectSizes()))
+
+    try {
+      const res = await fetch('/post', { method: 'POST', body: fd })
+      const data = await res.json()
+      result.style.display = 'block'
+      if (res.ok) {
+        result.className = 'ok'
+        result.textContent = '✓ ' + (data.message || 'Опубліковано')
+      } else {
+        result.className = 'fail'
+        result.textContent = '✗ ' + (data.message || 'Помилка')
+      }
+    } catch (err) {
+      result.style.display = 'block'
+      result.className = 'fail'
+      result.textContent = '✗ ' + err.message
+    } finally {
+      btn.disabled = false
+      btn.textContent = 'Опублікувати'
+    }
+  })
+</script>
+</body>
+</html>
