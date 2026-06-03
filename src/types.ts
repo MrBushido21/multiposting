@@ -11,3 +11,23 @@ export interface PostBodyI {
     searchAliace: string 
 }
 
+export interface ISiteItemsName {
+    title: string
+}
+
+export interface IMapItem {
+  A: string,
+  B: string,
+  C: SizesI,
+  D: number,
+  E: number,
+  F: number,
+  G: number,
+  H: number,
+  I: number,
+  J: number,
+  K: number,
+  L: number,
+  M: string,
+  N: SizesI
+}
